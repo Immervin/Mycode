@@ -6,7 +6,7 @@ import re
 
 api_service_name = "youtube"
 api_version = "v3"
-api_key="AIzaSyDyxk1Q_KgOW0n4OinFCgGzIgeVPdymfWo"
+api_key=""
 
 youtube = googleapiclient.discovery.build(api_service_name, api_version, developerKey=api_key)
 
@@ -135,7 +135,21 @@ def execute_query(user_response):
     elif user_response == "What is the average duration of all videos in each channel, and what are their corresponding channel names?":
         query = 'SELECT cd.channel_name AS "Channel Name", AVG(v.duration) AS "Average Duration" FROM channel_details cd JOIN videos v ON cd.channel_plylstid = v.playlist_id GROUP BY cd.channel_name'
     elif user_response == "Which videos have the highest number of comments, and what are their corresponding channel names?":
-        query = 'SELECT v.video_name AS "Video Name", cd.channel_name AS "Channel Name", COUNT(c.comment_id) AS "Number of Comments" FROM videos v JOIN channel_details cd ON v.playlist_id = cd.channel_plylstid JOIN comments c ON v.video_id = c.video_id GROUP BY v.video_name, cd.channel_name'
+        query = '''select distinct tply.video_name "Video Name",cd.channel_name "Channel Name",tply.count_comment "Comment Count" from 
+                     (select count_comment,
+					         v.playlist_id,
+							 video_name 
+					  from(SELECT count_comment,
+					               video_id 
+						   FROM (SELECT COUNT(comment_id) AS count_comment,
+						                video_id 
+								 FROM comments                    
+								 where comment_id not like 'error%' GROUP BY video_id) AS tmax) tvideo,videos v 
+					  where tvideo.video_id=v.video_id)tply, channel_details cd 
+where cd.channel_plylstid=tply.playlist_id and 
+count_comment =(SELECT MAX(count_comment) 
+                FROM (SELECT COUNT(comment_id) AS count_comment 
+				FROM comments GROUP BY video_id) AS tmax)'''
 
     mycursor.execute(query)
     result = mycursor.fetchall()
@@ -169,6 +183,21 @@ try:
         # Check if channel_id exists in channel_details table
         mycursor.execute('SELECT * FROM channel_details WHERE channel_id = %s', (channel_id,))
         out_channel = mycursor.fetchall()
+
+        questions = {
+    "Questionaries": [
+        "What are the names of all the videos and their corresponding channels?", 
+        "Which channels have the most number of videos, and how many videos do they have?",
+        "What are the top 10 most viewed videos and their respective channels?", 
+        "How many comments were made on each video, and what are their corresponding video names?",
+        "Which videos have the highest number of likes, and what are their corresponding channel names?",
+        "What is the total number of likes and dislikes for each video, and what are their corresponding video names?",
+        "What is the total number of views for each channel, and what are their corresponding channel names?",
+        "What are the names of all the channels that have published videos in the year 2022?",
+        "What is the average duration of all videos in each channel, and what are their corresponding channel names?",
+        "Which videos have the highest number of comments, and what are their corresponding channel names?"
+    ]
+}
 
         if out_channel:
             # If channel_id exists, fetch details from channel_details table
@@ -205,20 +234,7 @@ try:
             elif selected_option == 'Comment Details':
                 st.dataframe(df_final_comments,hide_index=True)
 
-            questions = {
-    "Questionaries": [
-        "What are the names of all the videos and their corresponding channels?", 
-        "Which channels have the most number of videos, and how many videos do they have?",
-        "What are the top 10 most viewed videos and their respective channels?", 
-        "How many comments were made on each video, and what are their corresponding video names?",
-        "Which videos have the highest number of likes, and what are their corresponding channel names?",
-        "What is the total number of likes and dislikes for each video, and what are their corresponding video names?",
-        "What is the total number of views for each channel, and what are their corresponding channel names?",
-        "What are the names of all the channels that have published videos in the year 2022?",
-        "What is the average duration of all videos in each channel, and what are their corresponding channel names?",
-        "Which videos have the highest number of comments, and what are their corresponding channel names?"
-    ]
-}
+ 
 
             # Display the questions and dropdown menus
             user_response = st.selectbox("Questionaries", questions["Questionaries"])
@@ -333,7 +349,14 @@ try:
             elif selected_option == 'Comment Details':
                 st.dataframe(df_final_comments,hide_index=True)
 
-
+            # Display the questions and dropdown menus
+            user_response = st.selectbox("Questionaries", questions["Questionaries"])
+            if user_response:
+                df = execute_query(user_response)
+                if not df.empty:
+                    st.dataframe(df, hide_index=True)
+                else:
+                    st.write("No data available for this question.")   
 
     # Close the database connection
     mydb.close()
